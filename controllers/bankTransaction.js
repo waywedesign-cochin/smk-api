@@ -81,6 +81,7 @@ export const getBankTransactions = TryCatch(async (req, res) => {
   const skip = (pageNumber - 1) * pageSize;
 
   const periodFilter = {};
+  const filtersForTotal = {};
 
   // location
   if (locationId && locationId !== "ALL") {
@@ -88,10 +89,32 @@ export const getBankTransactions = TryCatch(async (req, res) => {
   }
 
   // date (month always sent)
-  if (year) {
+  // ---------- UTC Safe Date Filter (supports ALL month/year) ----------
+  if (year && year !== "ALL") {
+    const y = Number(year);
+
+    let start;
+    let end;
+
+    if (month && month !== "ALL") {
+      const m = Number(month);
+
+      start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+      end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+    } else {
+      // Whole year
+      start = new Date(Date.UTC(y, 0, 1, 0, 0, 0));
+      end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+    }
+
     periodFilter.transactionDate = {
-      gte: new Date(Number(year), Number(month) - 1, 1),
-      lte: new Date(Number(year), Number(month), 0, 23, 59, 59, 999),
+      gte: start,
+      lte: end,
+    };
+
+    filtersForTotal.transactionDate = {
+      gte: start,
+      lte: end,
     };
   }
 
@@ -123,17 +146,8 @@ export const getBankTransactions = TryCatch(async (req, res) => {
     ];
   }
 
-  const filtersForTotal = {};
-
   if (locationId && locationId !== "ALL") {
     filtersForTotal.locationId = locationId;
-  }
-
-  if (year) {
-    filtersForTotal.transactionDate = {
-      gte: new Date(Number(year), Number(month) - 1, 1),
-      lte: new Date(Number(year), Number(month), 0, 23, 59, 59, 999),
-    };
   }
 
   // calculate total debit and credit

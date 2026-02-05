@@ -275,17 +275,21 @@ export const getDirectorLedgerEntries = TryCatch(async (req, res) => {
   const periodFilter = { directorId };
 
   if (year) {
-    if (month && month !== "all-months") {
-      periodFilter.transactionDate = {
-        gte: new Date(year, parseInt(month, 10) - 1, 1),
-        lte: new Date(year, parseInt(month, 10), 0, 23, 59, 59, 999),
-      };
-    } else {
-      periodFilter.transactionDate = {
-        gte: new Date(year, 0, 1),
-        lte: new Date(year, 11, 31, 23, 59, 59, 999),
-      };
-    }
+    const y = Number(year);
+    const m = month && month !== "all-months" ? Number(month) : null;
+
+    const start = m
+      ? new Date(Date.UTC(y, m - 1, 1, 0, 0, 0))
+      : new Date(Date.UTC(y, 0, 1, 0, 0, 0));
+
+    const end = m
+      ? new Date(Date.UTC(y, m, 0, 23, 59, 59, 999))
+      : new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+
+    periodFilter.transactionDate = {
+      gte: start,
+      lte: end,
+    };
   }
 
   if (search)
@@ -814,7 +818,7 @@ export const deleteDirectorLedgerEntry = TryCatch(async (req, res) => {
     });
 
     //clear redis cache
-   // await clearRedisCache("directorLedger:*");
+    // await clearRedisCache("directorLedger:*");
 
     //create communication log
     await addCommunicationLogEntry(
