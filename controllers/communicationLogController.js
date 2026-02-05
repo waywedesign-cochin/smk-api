@@ -54,11 +54,27 @@ export const getCommunicationLogs = TryCatch(async (req, res) => {
       { message: { contains: search, mode: "insensitive" } },
     ];
   }
-  if (year && month) {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 1);
-    logFilter.date = { gte: startDate, lt: endDate };
+ // ---- DATE FILTER (robust) ----
+if (year) {
+  const y = Number(year);
+  const m = Number(month);
+
+  // Year range always applied
+  let startDate = new Date(y, 0, 1, 0, 0, 0);
+  let endDate = new Date(y + 1, 0, 1, 0, 0, 0);
+
+  // If real month is provided, narrow to that month
+  if (month && month !== "ALL" && !Number.isNaN(m)) {
+    startDate = new Date(y, m - 1, 1, 0, 0, 0);
+    endDate = new Date(y, m, 1, 0, 0, 0);
   }
+
+  logFilter.date = {
+    gte: startDate,
+    lt: endDate,
+  };
+}
+
   const totalCount = await prisma.communicationLog.count({ where: logFilter });
   const totalPages = Math.ceil(totalCount / limit);
   const communicationLogs = await prisma.communicationLog.findMany({
