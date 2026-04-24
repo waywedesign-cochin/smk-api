@@ -257,57 +257,65 @@ export const getCashbookEntries = TryCatch(async (req, res) => {
 
   // ---------- Calculate Opening & Period Balance ----------
   const numericYear = Number(year);
-  const numericMonth = month && month !== "ALL" ? Number(month) : null;
-
-  const periodStartDate = numericMonth
-    ? new Date(numericYear, numericMonth - 1, 1)
-    : new Date(numericYear, 0, 1);
-
-  const periodEndDate = numericMonth
-    ? new Date(numericYear, numericMonth, 0, 23, 59, 59, 999)
-    : new Date(numericYear, 11, 31, 23, 59, 59, 999);
-  const openingEntries = await prisma.cashbook.findMany({
-    where: {
-      locationId,
-      transactionDate: {
-        lt: periodStartDate,
-      },
-    },
-  });
+  const numericMonth =
+    month && month !== "ALL" && month !== "allmonths" ? Number(month) : null;
+  const isValidYear = year && year !== "ALL" && !isNaN(numericYear);
 
   let openingBalance = 0;
-
-  openingEntries.forEach((e) => {
-    if (e.debitCredit === "CREDIT") openingBalance += e.amount;
-    if (e.debitCredit === "DEBIT") openingBalance -= e.amount;
-  });
-  const periodEntries = await prisma.cashbook.findMany({
-    where: {
-      locationId,
-      transactionDate: {
-        gte: periodStartDate,
-        lte: periodEndDate,
-      },
-    },
-  });
-
   let periodBalance = 0;
+  let closingBalance = 0;
+  let periodStartDate = null;
+  let periodEndDate = null;
 
-  periodEntries.forEach((e) => {
-    if (e.debitCredit === "CREDIT") periodBalance += e.amount;
-    if (e.debitCredit === "DEBIT") periodBalance -= e.amount;
-  });
+  if (isValidYear) {
+    periodStartDate = numericMonth
+      ? new Date(numericYear, numericMonth - 1, 1)
+      : new Date(numericYear, 0, 1);
 
-  const closingBalance = openingBalance + periodBalance;
+    periodEndDate = numericMonth
+      ? new Date(numericYear, numericMonth, 0, 23, 59, 59, 999)
+      : new Date(numericYear, 11, 31, 23, 59, 59, 999);
+
+    const openingEntries = await prisma.cashbook.findMany({
+      where: {
+        locationId,
+        transactionDate: { lt: periodStartDate },
+      },
+    });
+
+    openingEntries.forEach((e) => {
+      if (e.debitCredit === "CREDIT") openingBalance += e.amount;
+      if (e.debitCredit === "DEBIT") openingBalance -= e.amount;
+    });
+
+    const periodEntries = await prisma.cashbook.findMany({
+      where: {
+        locationId,
+        transactionDate: { gte: periodStartDate, lte: periodEndDate },
+      },
+    });
+
+    periodEntries.forEach((e) => {
+      if (e.debitCredit === "CREDIT") periodBalance += e.amount;
+      if (e.debitCredit === "DEBIT") periodBalance -= e.amount;
+    });
+
+    closingBalance = openingBalance + periodBalance;
+  } else {
+    // All Years selected — use already computed totals, no date filter needed
+    periodBalance = totalCredit - totalDebit;
+    closingBalance = periodBalance;
+  }
 
   // ---------- Entries (apply transactionType filter only here) ----------
-  const cashbookFilter = {
-    locationId,
-    transactionDate: {
+  const cashbookFilter = { locationId };
+
+  if (isValidYear && periodStartDate && periodEndDate) {
+    cashbookFilter.transactionDate = {
       gte: periodStartDate,
       lte: periodEndDate,
-    },
-  };
+    };
+  }
 
   if (transactionType) {
     cashbookFilter.transactionType = transactionType;
